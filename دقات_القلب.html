@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>محاكي دقات القلب وتخطيط القلب الكهربائي (ECG)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Font Cairo -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        medical: {
+                            bg: '#0a0f1d',
+                            card: '#111827',
+                            border: '#1f293d',
+                            accent: '#10b981',
+                            cyan: '#06b6d4',
+                            danger: '#ef4444',
+                            warning: '#f59e0b',
+                            grid: 'rgba(16, 185, 129, 0.15)'
+                        }
+                    },
+                    fontFamily: {
+                        cairo: ['Cairo', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #0a0f1d;
+            color: #f3f4f6;
+            user-select: none;
+        }
+        
+        /* Custom Glowing and Shadows */
+        .glow-green {
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+        }
+        .glow-red {
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+        }
+        .text-glow-green {
+            text-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+        }
+        .text-glow-red {
+            text-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
+        }
+        
+        /* Glassmorphism */
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Pulse Animation for Heart Icon */
+        @keyframes heartPulse {
+            0% { transform: scale(1); }
+            15% { transform: scale(1.18); }
+            30% { transform: scale(1.02); }
+            45% { transform: scale(1.12); }
+            60% { transform: scale(1); }
+            100% { transform: scale(1); }
+        }
+        
+        .beating-heart {
+            transform-origin: center;
+        }
+
+        /* Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: #1f293d;
+            border-radius: 8px;
+            height: 8px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #10b981;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.8);
+            transition: all 0.2s ease;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            background: #34d399;
+        }
+
+        /* Scanline effect */
+        .scanline {
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0, 0, 0, 0.2) 50%,
+                rgba(0, 0, 0, 0.2)
+            );
+            background-size: 100% 4px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-2 md:p-6 overflow-x-hidden">
+
+    <!-- Header Section -->
+    <header class="glass-panel rounded-2xl p-4 mb-4 flex flex-wrap justify-between items-center border-b border-medical-border shadow-lg">
+        <div class="flex items-center space-x-3 space-x-reverse">
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <i class="fa-solid fa-heart-pulse text-2xl animate-pulse"></i>
+            </div>
+            <div>
+                <h1 class="text-xl md:text-2xl font-extrabold text-white tracking-wide">نظام محاكاة دقات القلب و ECG</h1>
+                <p class="text-xs text-gray-400">منصة المحاكاة الطبية المتقدمة لتخطيط القلب الكهربائي</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3 mt-3 sm:mt-0">
+            <!-- Status Badge -->
+            <div id="statusBadge" class="px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                <span id="statusBadgeText">المؤشرات طبيعية</span>
+            </div>
+            
+            <!-- Quick Audio Mute Toggle -->
+            <button id="btnQuickMute" class="p-2.5 rounded-xl bg-gray-800/80 hover:bg-gray-700 text-gray-300 hover:text-white transition-all border border-gray-700">
+                <i id="quickMuteIcon" class="fa-solid fa-volume-high"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-4 flex-grow">
+        
+        <!-- Left Panel: Controls & Settings (4 cols on lg) -->
+        <section class="lg:col-span-4 flex flex-col gap-4">
+            
+            <!-- Rhythm Selection Card -->
+            <div class="glass-panel p-5 rounded-2xl flex flex-col gap-3">
+                <h2 class="text-base font-bold text-gray-200 flex items-center gap-2 border-b border-gray-800 pb-2">
+                    <i class="fa-solid fa-[#06b6d4] fa-wave-square text-cyan-400"></i>
+                    نوع الإيقاع القلبي (Heart Rhythm)
+                </h2>
+                
+                <div class="grid grid-cols-2 gap-2 mt-1">
+                    <button data-rhythm="NSR" class="rhythm-btn px-3 py-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/20 text-emerald-300 text-xs font-bold transition-all hover:bg-emerald-500/30 text-right flex flex-col justify-between">
+                        <span>طبيعي (NSR)</span>
+                        <span class="text-[10px] text-gray-400 font-normal">Normal Sinus</span>
+                    </button>
+                    <button data-rhythm="BRADY" class="rhythm-btn px-3 py-2.5 rounded-xl border border-gray-800 bg-gray-800/50 text-gray-300 text-xs font-bold transition-all hover:bg-gray-700/50 text-right flex flex-col justify-between">
+                        <span>بطء القلب (Bradycardia)</span>
+                        <span class="text-[10px] text-gray-400 font-normal">&lt; 60 BPM</span>
+                    </button>
+                    <button data-rhythm="TACHY" class="rhythm-btn px-3 py-2.5 rounded-xl border border-gray-800 bg-gray-800/50 text-gray-300 text-xs font-bold transition-all hover:bg-gray-700/50 text-right flex flex-col justify-between">
+                        <span>تسارع القلب (Tachycardia)</span>
+                        <span class="text-[10px] text-gray-400 font-normal">&gt; 100 BPM</span>
+                    </button>
+                    <button data-rhythm="AFIB" class="rhythm-btn px-3 py-2.5 rounded-xl border border-gray-800 bg-gray-800/50 text-gray-300 text-xs font-bold transition-all hover:bg-gray-700/50 text-right flex flex-col justify-between">
+                        <span>رجفان أذيني (AFib)</span>
+                        <span class="text-[10px] text-gray-400 font-normal">غير منتظم</span>
+                    </button>
+                    <button data-rhythm="VTACH" class="rhythm-btn col-span-1 px-3 py-2.5 rounded-xl border border-gray-800 bg-gray-800/50 text-gray-300 text-xs font-bold transition-all hover:bg-gray-700/50 text-right flex flex-col justify-between">
+                        <span>تسارع بطيني (VTach)</span>
+                        <span class="text-[10px] text-gray-400 font-normal">خطير جداً</span>
+                    </button>
+                    <button data-rhythm="FLATLINE" class="rhythm-btn col-span-1 px-3 py-2.5 rounded-xl border border-gray-800 bg-gray-800/50 text-gray-300 text-xs font-bold transition-all hover:bg-gray-700/50 text-right flex flex-col justify-between">
+                        <span>توقف القلب (Flatline)</span>
+                        <span class="text-[10px] text-gray-400 font-normal">Asystole</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- BPM & Controls Card -->
+            <div class="glass-panel p-5 rounded-2xl flex flex-col gap-4">
+                <div class="flex justify-between items-center border-b border-gray-800 pb-2">
+                    <h2 class="text-base font-bold text-gray-200 flex items-center gap-2">
+                        <i class="fa-solid fa-sliders text-emerald-400"></i>
+                        التحكم في نبضات القلب (BPM)
+                    </h2>
+                    <span id="bpmValDisplay" class="text-2xl font-black text-emerald-400 font-mono tracking-wider">75</span>
+                </div>
+
+                <!-- Slider -->
+                <div class="flex flex-col gap-1 my-1">
+                    <input type="range" id="bpmSlider" min="30" max="220" value="75" class="w-full cursor-pointer">
+                    <div class="flex justify-between text-[11px] text-gray-400 font-mono px-1">
+                        <span>30 BPM</span>
+                        <span>120</span>
+                        <span>220 BPM</span>
+                    </div>
+                </div>
+
+                <!-- Presets -->
+                <div class="flex flex-wrap gap-2 pt-1">
+                    <button data-preset="45" class="preset-btn px-2.5 py-1 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 text-xs font-medium transition-all">راحة (45)</button>
+                    <button data-preset="60" class="preset-btn px-2.5 py-1 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 text-xs font-medium transition-all">طبيعي (60)</button>
+                    <button data-preset="75" class="preset-btn px-2.5 py-1 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 text-xs font-medium transition-all">متوسط (75)</button>
+                    <button data-preset="140" class="preset-btn px-2.5 py-1 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 text-xs font-medium transition-all">تمرين (140)</button>
+                    <button data-preset="185" class="preset-btn px-2.5 py-1 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 text-xs font-medium transition-all">قصوى (185)</button>
+                </div>
+
+                <!-- Special Actions: Stress Test & Artifact Noise -->
+                <div class="grid grid-cols-2 gap-3 pt-3 border-t border-gray-800">
+                    <button id="btnStressTest" class="px-3 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-person-running"></i>
+                        <span>اختبار الجهد</span>
+                    </button>
+                    
+                    <button id="btnToggleNoise" class="px-3 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700 font-bold text-xs transition-all flex items-center justify-center gap-1.5">
+                        <i id="noiseIcon" class="fa-solid fa-square-minus text-gray-400"></i>
+                        <span>تشويش العضلات</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sound & Volume Controls -->
+            <div class="glass-panel p-5 rounded-2xl flex flex-col gap-3">
+                <h2 class="text-base font-bold text-gray-200 flex items-center gap-2 border-b border-gray-800 pb-2">
+                    <i class="fa-solid fa-volume-high text-cyan-400"></i>
+                    إعدادات الصوت والتنبيه
+                </h2>
+
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-gray-300 font-medium">صوت النبض (QRS Beep)</span>
+                    <button id="btnToggleSound" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition-all">
+                        مفعل
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <i class="fa-solid fa-volume-low text-xs text-gray-400"></i>
+                    <input type="range" id="volumeSlider" min="0" max="100" value="70" class="w-full">
+                    <i class="fa-solid fa-volume-high text-xs text-gray-400"></i>
+                </div>
+
+                <div class="flex items-center justify-between pt-2 border-t border-gray-800">
+                    <span class="text-xs text-gray-300 font-medium">جرس الإنذار للطوارئ</span>
+                    <button id="btnToggleAlarm" class="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold transition-all">
+                        تلقائي
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Right Panel: Visualizations & Metrics (8 cols on lg) -->
+        <section class="lg:col-span-8 flex flex-col gap-4">
+            
+            <!-- ECG Screen Canvas Card -->
+            <div class="glass-panel p-4 rounded-2xl flex flex-col gap-2 relative overflow-hidden">
+                <!-- Screen Overlay Effect -->
+                <div class="pointer-events-none absolute inset-0 scanline opacity-30 z-10"></div>
+                
+                <div class="flex justify-between items-center px-2 z-20">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span class="text-xs font-bold text-emerald-400 tracking-wider">تخطيط مباشر - LEAD II (25mm/s , 10mm/mV)</span>
+                    </div>
+                    <div class="text-[11px] font-mono text-gray-400 flex gap-3">
+                        <span id="pacingInfo">Rhythm: NSR</span>
+                        <span id="noiseInfo" class="hidden text-amber-400">Noise: Active</span>
+                    </div>
+                </div>
+
+                <!-- Canvas Wrapper -->
+                <div class="w-full h-64 md:h-80 bg-black/90 rounded-xl border border-emerald-500/20 relative overflow-hidden shadow-inner">
+                    <canvas id="ecgCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+                </div>
+            </div>
+
+            <!-- Lower Dashboard Metrics & Anatomical Heart -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                
+                <!-- Digital BPM & Status Displays (7 cols) -->
+                <div class="md:col-span-7 grid grid-cols-2 gap-3">
+                    
+                    <!-- Main BPM Card -->
+                    <div id="bpmCard" class="col-span-2 glass-panel p-4 rounded-2xl flex items-center justify-between border-r-4 border-emerald-500 transition-all">
+                        <div>
+                            <p class="text-xs font-semibold text-gray-400">معدل النبض اللحظي</p>
+                            <div class="flex items-baseline gap-2 mt-1">
+                                <span id="bpmLiveDisplay" class="text-5xl font-extrabold text-emerald-400 font-mono text-glow-green">75</span>
+                                <span class="text-xs font-bold text-gray-400">BPM / نبضة بالدقيقة</span>
+                            </div>
+                        </div>
+                        <div class="text-left flex flex-col items-end">
+                            <span id="rhythmTextArabic" class="text-sm font-bold text-gray-200">إيقاع جيبي طبيعي</span>
+                            <span id="clinicalInterpretation" class="text-[11px] text-emerald-400 mt-1 font-medium">حالة مستقرة - طبيعي</span>
+                        </div>
+                    </div>
+
+                    <!-- Metric 1: PR Interval -->
+                    <div class="glass-panel p-3.5 rounded-2xl flex flex-col justify-between">
+                        <span class="text-[11px] text-gray-400 font-semibold">فترة PR (Interval)</span>
+                        <div class="flex items-baseline justify-between mt-2">
+                            <span id="prIntervalVal" class="text-xl font-bold font-mono text-cyan-400">160</span>
+                            <span class="text-[10px] text-gray-500">ms</span>
+                        </div>
+                        <span class="text-[10px] text-gray-500 mt-1">المعدل الطبيعي: 120-200ms</span>
+                    </div>
+
+                    <!-- Metric 2: QT/QTc Interval -->
+                    <div class="glass-panel p-3.5 rounded-2xl flex flex-col justify-between">
+                        <span class="text-[11px] text-gray-400 font-semibold">فترة QTc (Corrected)</span>
+                        <div class="flex items-baseline justify-between mt-2">
+                            <span id="qtIntervalVal" class="text-xl font-bold font-mono text-cyan-400">410</span>
+                            <span class="text-[10px] text-gray-500">ms</span>
+                        </div>
+                        <span class="text-[10px] text-gray-500 mt-1">المعدل الطبيعي: &lt;440ms</span>
+                    </div>
+
+                    <!-- Metric 3: Signal Quality -->
+                    <div class="glass-panel p-3.5 rounded-2xl flex flex-col justify-between">
+                        <span class="text-[11px] text-gray-400 font-semibold">جودة الإشارة الطبية</span>
+                        <div class="flex items-center justify-between mt-2">
+                            <span id="signalQualityVal" class="text-lg font-bold font-mono text-emerald-400">99%</span>
+                            <i class="fa-solid fa-satellite-dish text-xs text-emerald-400"></i>
+                        </div>
+                        <div class="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden mt-1">
+                            <div id="signalBar" class="bg-emerald-500 h-full w-[99%] transition-all"></div>
+                        </div>
+                    </div>
+
+                    <!-- Metric 4: Cardiac Output Est -->
+                    <div class="glass-panel p-3.5 rounded-2xl flex flex-col justify-between">
+                        <span class="text-[11px] text-gray-400 font-semibold">نتاج القلب التقديري (CO)</span>
+                        <div class="flex items-baseline justify-between mt-2">
+                            <span id="cardiacOutputVal" class="text-xl font-bold font-mono text-cyan-400">5.2</span>
+                            <span class="text-[10px] text-gray-500">L/min</span>
+                        </div>
+                        <span class="text-[10px] text-gray-500 mt-1">المعدل الطبيعي: 4.0-8.0 L/min</span>
+                    </div>
+
+                </div>
+
+                <!-- Anatomical SVG Heart Visualizer Card (5 cols) -->
+                <div class="md:col-span-5 glass-panel p-4 rounded-2xl flex flex-col items-center justify-between relative overflow-hidden">
+                    <div class="w-full flex justify-between items-center mb-1">
+                        <span class="text-xs font-bold text-gray-300">المحاكاة التشريحية للانقباض</span>
+                        <span class="text-[10px] text-cyan-400 font-mono">Sync: Active</span>
+                    </div>
+
+                    <!-- Heart Graphic SVG Container -->
+                    <div class="relative w-36 h-36 md:w-44 md:h-44 flex items-center justify-center my-2">
+                        <!-- Background Pulsing Glow Aura -->
+                        <div id="heartGlowAura" class="absolute w-28 h-28 rounded-full bg-emerald-500/20 blur-xl transition-all"></div>
+                        
+                        <!-- SVG Heart Shape -->
+                        <svg id="svgHeart" class="w-28 h-28 md:w-36 md:h-36 beating-heart transition-transform text-rose-500 drop-shadow-lg" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                            <!-- Internal Atrium/Ventricle Detail lines -->
+                            <path d="M12 5v12" stroke="rgba(0,0,0,0.3)" stroke-width="1" stroke-dasharray="2 1"/>
+                        </svg>
+
+                        <!-- Systole Flash Overlay -->
+                        <div id="systoleFlash" class="absolute inset-0 rounded-full border-2 border-emerald-400/0 transition-all pointer-events-none"></div>
+                    </div>
+
+                    <div class="w-full flex justify-around text-center text-[11px] text-gray-400 pt-2 border-t border-gray-800/80">
+                        <div>
+                            <span class="block font-bold text-gray-200">الأذينين</span>
+                            <span id="atrialStatus" class="text-[10px] text-emerald-400">انقباض منظم</span>
+                        </div>
+                        <div class="border-r border-gray-800"></div>
+                        <div>
+                            <span class="block font-bold text-gray-200">البطينين</span>
+                            <span id="ventricleStatus" class="text-[10px] text-emerald-400">انقباض متزامن</span>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Medical Educational Footer -->
+    <footer class="glass-panel rounded-xl p-3 text-center text-xs text-gray-400 border-t border-gray-800">
+        <div class="flex flex-wrap justify-between items-center gap-2 px-2">
+            <span>محاكي تخطيط القلب الكهربائي (ECG Simulator v2.5) — مخصص للأغراض التعليمية والمشاريع التفاعلية.</span>
+            <span class="font-mono text-emerald-400/80">Web Audio API & Canvas Engine</span>
+        </div>
+    </footer>
+
+    <!-- JavaScript Simulator Engine -->
+    <script>
+        /**
+         * Interactive ECG & Heart Rate Simulator Engine
+         * Powered by HTML5 Canvas & Web Audio API Synthesis
+         */
+
+        // State Management
+        const state = {
+            bpm: 75,
+            targetBpm: 75,
+            rhythm: 'NSR', // NSR, BRADY, TACHY, AFIB, VTACH, FLATLINE
+            audioMuted: false,
+            volume: 0.7,
+            noiseActive: false,
+            alarmActive: false,
+            stressTestActive: false,
+            stressTimer: null,
+            timeScale: 1.0
+        };
+
+        // DOM Elements References
+        const canvas = document.getElementById('ecgCanvas');
+        const ctx = canvas.getContext('2d');
+        const bpmSlider = document.getElementById('bpmSlider');
+        const bpmValDisplay = document.getElementById('bpmValDisplay');
+        const bpmLiveDisplay = document.getElementById('bpmLiveDisplay');
+        const statusBadge = document.getElementById('statusBadge');
+        const statusBadgeText = document.getElementById('statusBadgeText');
+        const rhythmTextArabic = document.getElementById('rhythmTextArabic');
+        const clinicalInterpretation = document.getElementById('clinicalInterpretation');
+        const bpmCard = document.getElementById('bpmCard');
+        const svgHeart = document.getElementById('svgHeart');
+        const heartGlowAura = document.getElementById('heartGlowAura');
+        const prIntervalVal = document.getElementById('prIntervalVal');
+        const qtIntervalVal = document.getElementById('qtIntervalVal');
+        const signalQualityVal = document.getElementById('signalQualityVal');
+        const signalBar = document.getElementById('signalBar');
+        const cardiacOutputVal = document.getElementById('cardiacOutputVal');
+        const pacingInfo = document.getElementById('pacingInfo');
+        const noiseInfo = document.getElementById('noiseInfo');
+        const atrialStatus = document.getElementById('atrialStatus');
+        const ventricleStatus = document.getElementById('ventricleStatus');
+
+        // Web Audio Context Setup
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // Play QRS Beep Sound
+        function playBeep(isHighPitch = false) {
+            if (state.audioMuted) return;
+            initAudio();
+            if (!audioCtx) return;
+
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                osc.type = 'sine';
+                // Flatline or extreme alarms can be higher pitch
+                const freq = isHighPitch ? 880 : (state.rhythm === 'VTACH' ? 750 : 580);
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+                gain.gain.setValueAtTime(state.volume * 0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.12);
+            } catch (e) {
+                console.error("Audio playback error:", e);
+            }
+        }
+
+        // Play Emergency Alarm Continuous Beep Tone
+        let alarmOsc = null;
+        let alarmGain = null;
+
+        function triggerAlarmSound(enable) {
+            initAudio();
+            if (!audioCtx) return;
+
+            if (enable && !state.audioMuted) {
+                if (alarmOsc) return; // already playing
+                try {
+                    alarmOsc = audioCtx.createOscillator();
+                    alarmGain = audioCtx.createGain();
+
+                    alarmOsc.type = 'sawtooth';
+                    alarmOsc.frequency.setValueAtTime(800, audioCtx.currentTime);
+
+                    // Pulsing alarm volume
+                    alarmGain.gain.setValueAtTime(state.volume * 0.2, audioCtx.currentTime);
+
+                    alarmOsc.connect(alarmGain);
+                    alarmGain.connect(audioCtx.destination);
+                    alarmOsc.start();
+                } catch(e){}
+            } else {
+                if (alarmOsc) {
+                    try {
+                        alarmOsc.stop();
+                        alarmOsc.disconnect();
+                    } catch(e){}
+                    alarmOsc = null;
+                    alarmGain = null;
+                }
+            }
+        }
+
+        // Canvas Responsive Resize
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // ECG Plotting Engine State
+        let xPos = 0;
+        const speed = 2.2; // Horizontal sweep speed
+        let lastY = canvas.height / 2;
+        let sampleIndex = 0;
+
+        // Waveform Generator Function
+        // Returns the normalized Y offset (-1.0 to +1.0) for current heartbeat phase t (0 to 1)
+        function getECGPoint(t, rhythm) {
+            if (rhythm === 'FLATLINE') {
+                return (Math.random() - 0.5) * 0.03; // Almost flat with tiny electronic noise
+            }
+
+            if (rhythm === 'VTACH') {
+                // Ventricular Tachycardia: Rapid sinusoidal/sawtooth wide waves
+                return Math.sin(t * Math.PI * 2) * 0.85 + (Math.sin(t * Math.PI * 4) * 0.15);
+            }
+
+            if (rhythm === 'AFIB') {
+                // Atrial Fibrillation: No clear P wave, fibrillatory baseline noise, irregular QRS
+                let y = 0;
+                // Baseline noise
+                y += Math.sin(t * Math.PI * 30) * 0.06 + (Math.random() - 0.5) * 0.08;
+
+                // Sharp QRS Complex around center
+                if (t > 0.42 && t < 0.52) {
+                    const phase = (t - 0.42) / 0.10;
+                    if (phase < 0.2) y -= phase * 1.5; // Q
+                    else if (phase < 0.6) y += (phase - 0.2) * 4.5 - 0.3; // R Peak
+                    else y -= (phase - 0.6) * 3.5; // S
+                }
+                // T Wave
+                if (t > 0.65 && t < 0.85) {
+                    y += Math.sin((t - 0.65) / 0.20 * Math.PI) * 0.18;
+                }
+                return y;
+            }
+
+            // Normal Sinus Rhythm (NSR), Bradycardia, Tachycardia Waveform Synthesis
+            let y = 0;
+
+            // 1. P Wave (Atrial Depolarization)
+            if (t >= 0.10 && t <= 0.22) {
+                const pPhase = (t - 0.10) / 0.12;
+                y += Math.sin(pPhase * Math.PI) * 0.15;
+            }
+
+            // 2. QRS Complex (Ventricular Depolarization)
+            if (t >= 0.40 && t <= 0.52) {
+                const qrsPhase = (t - 0.40) / 0.12;
+                if (qrsPhase < 0.25) {
+                    // Q Dip
+                    y -= (qrsPhase / 0.25) * 0.2;
+                } else if (qrsPhase < 0.65) {
+                    // R Peak (High Sharp Spike)
+                    const rProgress = (qrsPhase - 0.25) / 0.40;
+                    y = -0.2 + rProgress * 1.4; 
+                    if (rProgress > 0.5) y = 1.2 - (rProgress - 0.5) * 2.6;
+                } else {
+                    // S Dip
+                    const sProgress = (qrsPhase - 0.65) / 0.35;
+                    y = -0.1 - (1 - sProgress) * 0.3;
+                }
+            }
+
+            // 3. T Wave (Ventricular Repolarization)
+            if (t >= 0.65 && t <= 0.85) {
+                const tPhase = (t - 0.65) / 0.20;
+                y += Math.sin(tPhase * Math.PI) * 0.28;
+            }
+
+            // 4. U Wave (minor trailing wave)
+            if (t >= 0.88 && t <= 0.95) {
+                const uPhase = (t - 0.88) / 0.07;
+                y += Math.sin(uPhase * Math.PI) * 0.04;
+            }
+
+            return y;
+        }
+
+        // Draw Medical Dark Grid Background on Canvas
+        function drawGrid() {
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            ctx.fillStyle = '#050811';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.lineWidth = 0.5;
+            
+            // Minor grid lines (5px)
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.08)';
+            ctx.beginPath();
+            for (let x = 0; x < width; x += 10) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+            }
+            for (let y = 0; y < height; y += 10) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+            }
+            ctx.stroke();
+
+            // Major grid lines (25px)
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.22)';
+            ctx.beginPath();
+            for (let x = 0; x < width; x += 50) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+            }
+            for (let y = 0; y < height; y += 50) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+            }
+            ctx.stroke();
+        }
+
+        // Main Animation Loop Variables
+        let phase = 0; // Phase inside single heart cycle (0 to 1)
+        let hasTriggeredBeat = false;
+
+        // Render Frame
+        function render() {
+            const width = canvas.width;
+            const height = canvas.height;
+            const centerY = height / 2;
+            const amplitude = height * 0.35;
+
+            // Calculate cycle duration in seconds from current BPM
+            // 60 / BPM = seconds per beat
+            const beatDuration = 60 / Math.max(state.bpm, 20); 
+            // Increment phase based on frame rate (60fps assumed approx ~0.0166s)
+            const deltaPhase = (0.0166 / beatDuration);
+            
+            phase += deltaPhase;
+            if (phase >= 1.0) {
+                phase %= 1.0;
+                hasTriggeredBeat = false;
+            }
+
+            // Calculate current waveform height
+            let waveVal = getECGPoint(phase, state.rhythm);
+
+            // Add muscle twitch / artifact noise if enabled
+            if (state.noiseActive && state.rhythm !== 'FLATLINE') {
+                waveVal += (Math.random() - 0.5) * 0.15;
+            }
+
+            const currentY = centerY - (waveVal * amplitude);
+
+            // Trigger beat effects (Audio & Heart Animation) around QRS Peak (phase approx 0.47)
+            if (!hasTriggeredBeat && phase >= 0.45 && phase <= 0.52 && state.rhythm !== 'FLATLINE') {
+                hasTriggeredBeat = true;
+                
+                // Audio Beep
+                playBeep(state.rhythm === 'VTACH' || state.bpm > 160);
+
+                // Animate SVG Heart Visual
+                triggerHeartBeatVisual();
+            }
+
+            // Clear vertical scan bar slice ahead of current X
+            const clearWidth = 18;
+            ctx.fillStyle = '#050811';
+            ctx.fillRect(xPos, 0, clearWidth, height);
+            
+            // Redraw Grid lines inside the cleared slice
+            ctx.lineWidth = 0.5;
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.12)';
+            ctx.beginPath();
+            for (let x = Math.floor(xPos); x < xPos + clearWidth; x++) {
+                if (x % 10 === 0) {
+                    ctx.moveTo(x, 0); ctx.lineTo(x, height);
+                }
+            }
+            ctx.stroke();
+
+            // Draw ECG Green Line Segment
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = state.rhythm === 'FLATLINE' || state.rhythm === 'VTACH' ? '#ef4444' : '#10b981';
+            ctx.shadowColor = ctx.strokeStyle;
+            ctx.shadowBlur = 8;
+
+            ctx.beginPath();
+            ctx.moveTo(xPos, lastY);
+            
+            xPos += speed;
+            if (xPos >= width) {
+                xPos = 0;
+                lastY = currentY;
+                ctx.moveTo(xPos, currentY);
+            } else {
+                ctx.lineTo(xPos, currentY);
+            }
+            ctx.stroke();
+
+            // Reset Shadow for next frame
+            ctx.shadowBlur = 0;
+            lastY = currentY;
+
+            // Draw leading cursor dot
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(xPos, currentY, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Smooth BPM transition towards target BPM
+            if (Math.abs(state.bpm - state.targetBpm) > 0.2) {
+                state.bpm += (state.targetBpm - state.bpm) * 0.03;
+                updateDashboardUI();
+            }
+
+            requestAnimationFrame(render);
+        }
+
+        // Trigger Heart Beat Pulse Graphic Animation
+        function triggerHeartBeatVisual() {
+            svgHeart.style.transform = 'scale(1.25)';
+            heartGlowAura.style.opacity = '0.9';
+            heartGlowAura.style.transform = 'scale(1.3)';
+
+            setTimeout(() => {
+                svgHeart.style.transform = 'scale(1.0)';
+                heartGlowAura.style.opacity = '0.3';
+                heartGlowAura.style.transform = 'scale(1.0)';
+            }, 140);
+        }
+
+        // Update Dashboard Indicators & Colors based on state
+        function updateDashboardUI() {
+            const displayBpm = Math.round(state.bpm);
+            bpmValDisplay.textContent = displayBpm;
+            bpmLiveDisplay.textContent = state.rhythm === 'FLATLINE' ? '0' : displayBpm;
+
+            // Dynamic Medical Diagnostic Logic
+            let colorClass = 'emerald';
+            let badgeText = 'المؤشرات طبيعية';
+            let arabRhythm = 'إيقاع جيبي طبيعي';
+            let interpText = 'حالة مستقرة - طبيعي';
+
+            if (state.rhythm === 'FLATLINE') {
+                colorClass = 'red';
+                badgeText = 'طوارئ: توقف القلب!';
+                arabRhythm = 'توقف ضخ القلب (Asystole)';
+                interpText = 'حالة حرج جدًا - انعدام النبض';
+            } else if (state.rhythm === 'VTACH') {
+                colorClass = 'red';
+                badgeText = 'طوارئ: تسارع بطيني!';
+                arabRhythm = 'تسارع بطيني (VTach)';
+                interpText = 'اضطراب خطير بالبطينين';
+            } else if (state.rhythm === 'AFIB') {
+                colorClass = 'amber';
+                badgeText = 'تحذير: رجفان أذيني';
+                arabRhythm = 'رجفان أذيني غير منتظم';
+                interpText = 'نبض غير منتظم - مخاطر تجلط';
+            } else if (displayBpm < 50) {
+                colorClass = 'amber';
+                badgeText = 'انخفاض معدل النبض';
+                arabRhythm = 'بطء القلب (Bradycardia)';
+                interpText = 'معدل نبض منخفض جداً';
+            } else if (displayBpm > 120) {
+                colorClass = 'amber';
+                badgeText = 'ارتفاع معدل النبض';
+                arabRhythm = 'تسارع القلب (Tachycardia)';
+                interpText = 'جهد مرتفع أو تسارع أذيني';
+            }
+
+            // Apply Theme Color Classes
+            if (colorClass === 'red') {
+                bpmLiveDisplay.className = 'text-5xl font-extrabold text-red-500 font-mono text-glow-red';
+                bpmCard.className = 'col-span-2 glass-panel p-4 rounded-2xl flex items-center justify-between border-r-4 border-red-500 transition-all glow-red';
+                statusBadge.className = 'px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 bg-red-500/20 text-red-400 border border-red-500/40';
+            } else if (colorClass === 'amber') {
+                bpmLiveDisplay.className = 'text-5xl font-extrabold text-amber-400 font-mono';
+                bpmCard.className = 'col-span-2 glass-panel p-4 rounded-2xl flex items-center justify-between border-r-4 border-amber-500 transition-all';
+                statusBadge.className = 'px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 bg-amber-500/20 text-amber-400 border border-amber-500/40';
+            } else {
+                bpmLiveDisplay.className = 'text-5xl font-extrabold text-emerald-400 font-mono text-glow-green';
+                bpmCard.className = 'col-span-2 glass-panel p-4 rounded-2xl flex items-center justify-between border-r-4 border-emerald-500 transition-all';
+                statusBadge.className = 'px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30';
+            }
+
+            statusBadgeText.textContent = badgeText;
+            rhythmTextArabic.textContent = arabRhythm;
+            clinicalInterpretation.textContent = interpText;
+
+            // Secondary Calculated Metrics
+            if (state.rhythm === 'FLATLINE') {
+                prIntervalVal.textContent = '---';
+                qtIntervalVal.textContent = '---';
+                cardiacOutputVal.textContent = '0.0';
+                atrialStatus.textContent = 'متوقف';
+                ventricleStatus.textContent = 'متوقف';
+                atrialStatus.className = 'text-[10px] text-red-500 font-bold';
+                ventricleStatus.className = 'text-[10px] text-red-500 font-bold';
+            } else {
+                // Approximate Intervals scaling with BPM
+                const pr = Math.round(160 * (75 / Math.max(displayBpm, 40)));
+                const qt = Math.round(400 * Math.sqrt(60 / Math.max(displayBpm, 40)));
+                const co = ((displayBpm * 70) / 1000).toFixed(1); // CO = HR * Stroke Volume (~70ml)
+
+                prIntervalVal.textContent = Math.min(Math.max(pr, 90), 280);
+                qtIntervalVal.textContent = Math.min(Math.max(qt, 240), 520);
+                cardiacOutputVal.textContent = co;
+
+                if (state.rhythm === 'AFIB') {
+                    atrialStatus.textContent = 'يرجف (غير فعال)';
+                    atrialStatus.className = 'text-[10px] text-amber-400 font-bold';
+                } else {
+                    atrialStatus.textContent = 'انقباض منظم';
+                    atrialStatus.className = 'text-[10px] text-emerald-400';
+                }
+                
+                ventricleStatus.textContent = state.rhythm === 'VTACH' ? 'انقباض سرييع متسارع' : 'انقباض متزامن';
+                ventricleStatus.className = state.rhythm === 'VTACH' ? 'text-[10px] text-red-400 font-bold' : 'text-[10px] text-emerald-400';
+            }
+
+            pacingInfo.textContent = `Rhythm: ${state.rhythm}`;
+
+            // Trigger emergency alarm audio if flatline or VTach
+            if ((state.rhythm === 'FLATLINE' || state.rhythm === 'VTACH') && state.alarmActive) {
+                triggerAlarmSound(true);
+            } else {
+                triggerAlarmSound(false);
+            }
+        }
+
+        // --- Event Listeners & UI Controls Interaction ---
+
+        // BPM Slider Input
+        bpmSlider.addEventListener('input', (e) => {
+            state.targetBpm = parseFloat(e.target.value);
+            state.bpm = state.targetBpm;
+            updateDashboardUI();
+        });
+
+        // Preset Buttons
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetVal = parseFloat(btn.dataset.preset);
+                bpmSlider.value = targetVal;
+                state.targetBpm = targetVal;
+                
+                // Auto switch rhythm if preset matches arrhythmia categories
+                if (targetVal < 50) state.rhythm = 'BRADY';
+                else if (targetVal > 160) state.rhythm = 'TACHY';
+                else state.rhythm = 'NSR';
+                
+                updateRhythmButtonsUI();
+                updateDashboardUI();
+            });
+        });
+
+        // Rhythm Selection Buttons
+        const rhythmBtns = document.querySelectorAll('.rhythm-btn');
+        function updateRhythmButtonsUI() {
+            rhythmBtns.forEach(btn => {
+                if (btn.dataset.rhythm === state.rhythm) {
+                    btn.className = 'rhythm-btn px-3 py-2.5 rounded-xl border border-emerald-500/60 bg-emerald-500/25 text-emerald-300 text-xs font-bold transition-all text-right flex flex-col justify-between shadow-md';
+                } else {
+                    btn.className = 'rhythm-btn px-3 py-2.5 rounded-xl border border-gray-800 bg-gray-800/50 text-gray-300 text-xs font-bold transition-all hover:bg-gray-700/50 text-right flex flex-col justify-between';
+                }
+            });
+        }
+
+        rhythmBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                state.rhythm = btn.dataset.rhythm;
+                
+                // Adjust BPM sensible default based on rhythm
+                if (state.rhythm === 'BRADY') state.targetBpm = 42;
+                else if (state.rhythm === 'TACHY') state.targetBpm = 150;
+                else if (state.rhythm === 'VTACH') state.targetBpm = 185;
+                else if (state.rhythm === 'NSR') state.targetBpm = 75;
+                
+                bpmSlider.value = state.targetBpm;
+                updateRhythmButtonsUI();
+                updateDashboardUI();
+            });
+        });
+
+        // Stress Test Simulation Trigger
+        const btnStressTest = document.getElementById('btnStressTest');
+        btnStressTest.addEventListener('click', () => {
+            if (state.stressTestActive) return;
+            state.stressTestActive = true;
+            btnStressTest.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            const originalBpm = state.targetBpm;
+            const originalRhythm = state.rhythm;
+            
+            state.rhythm = 'TACHY';
+            state.targetBpm = 165;
+            bpmSlider.value = 165;
+            updateRhythmButtonsUI();
+            updateDashboardUI();
+
+            // Ramps down after 7 seconds
+            setTimeout(() => {
+                state.targetBpm = originalBpm;
+                state.rhythm = originalRhythm;
+                bpmSlider.value = originalBpm;
+                state.stressTestActive = false;
+                btnStressTest.classList.remove('opacity-50', 'cursor-not-allowed');
+                updateRhythmButtonsUI();
+                updateDashboardUI();
+            }, 7000);
+        });
+
+        // Toggle Muscle Noise / Signal Quality
+        const btnToggleNoise = document.getElementById('btnToggleNoise');
+        btnToggleNoise.addEventListener('click', () => {
+            state.noiseActive = !state.noiseActive;
+            if (state.noiseActive) {
+                btnToggleNoise.className = 'px-3 py-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold text-xs transition-all flex items-center justify-center gap-1.5';
+                document.getElementById('noiseIcon').className = 'fa-solid fa-square-check text-amber-400';
+                noiseInfo.classList.remove('hidden');
+                signalQualityVal.textContent = '74%';
+                signalQualityVal.className = 'text-lg font-bold font-mono text-amber-400';
+                signalBar.className = 'bg-amber-500 h-full w-[74%] transition-all';
+            } else {
+                btnToggleNoise.className = 'px-3 py-2.5 rounded-xl bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700 font-bold text-xs transition-all flex items-center justify-center gap-1.5';
+                document.getElementById('noiseIcon').className = 'fa-solid fa-square-minus text-gray-400';
+                noiseInfo.classList.add('hidden');
+                signalQualityVal.textContent = '99%';
+                signalQualityVal.className = 'text-lg font-bold font-mono text-emerald-400';
+                signalBar.className = 'bg-emerald-500 h-full w-[99%] transition-all';
+            }
+        });
+
+        // Sound Toggle
+        const btnToggleSound = document.getElementById('btnToggleSound');
+        const btnQuickMute = document.getElementById('btnQuickMute');
+        const quickMuteIcon = document.getElementById('quickMuteIcon');
+
+        function toggleSoundState() {
+            state.audioMuted = !state.audioMuted;
+            if (state.audioMuted) {
+                btnToggleSound.textContent = 'مكتوم';
+                btnToggleSound.className = 'px-3 py-1.5 rounded-lg bg-gray-800 text-gray-400 border border-gray-700 text-xs font-bold transition-all';
+                quickMuteIcon.className = 'fa-solid fa-volume-xmark text-red-400';
+            } else {
+                btnToggleSound.textContent = 'مفعل';
+                btnToggleSound.className = 'px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition-all';
+                quickMuteIcon.className = 'fa-solid fa-volume-high text-emerald-400';
+            }
+            if (state.audioMuted) triggerAlarmSound(false);
+        }
+
+        btnToggleSound.addEventListener('click', toggleSoundState);
+        btnQuickMute.addEventListener('click', toggleSoundState);
+
+        // Volume Slider
+        const volumeSlider = document.getElementById('volumeSlider');
+        volumeSlider.addEventListener('input', (e) => {
+            state.volume = e.target.value / 100;
+        });
+
+        // Alarm Toggle Button
+        const btnToggleAlarm = document.getElementById('btnToggleAlarm');
+        btnToggleAlarm.addEventListener('click', () => {
+            state.alarmActive = !state.alarmActive;
+            if (state.alarmActive) {
+                btnToggleAlarm.textContent = 'مفعل دائماً';
+                btnToggleAlarm.className = 'px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold transition-all';
+            } else {
+                btnToggleAlarm.textContent = 'تلقائي';
+                btnToggleAlarm.className = 'px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 border border-gray-700 text-xs font-bold transition-all';
+                triggerAlarmSound(false);
+            }
+        });
+
+        // Initialize App on Window Load
+        window.onload = function() {
+            drawGrid();
+            updateDashboardUI();
+            
+            // Start Canvas animation engine loop
+            requestAnimationFrame(render);
+        };
+
+    </script>
+</body>
+</html>
